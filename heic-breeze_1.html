@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HEIC BREEZE / iPhone写真をJPEGに</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/heic-to@1.5.2/dist/iife/heic-to.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Zen+Maru+Gothic:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg-a: #eafcf8;
+    --bg-b: #e6f5fd;
+    --mint: #2fbfa6;
+    --mint-deep: #1f9c86;
+    --sky: #3fa9e0;
+    --peach: #ffb08a;
+    --ink: #163b36;
+    --sub: #5c8c86;
+    --card: #ffffff;
+    --line: #d8f0ea;
+    --red: #ef6f5e;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    color:var(--ink);
+    font-family:'Zen Maru Gothic', sans-serif;
+    background: linear-gradient(160deg, var(--bg-a), var(--bg-b));
+    min-height:100vh;
+    overflow-x:hidden;
+  }
+  .rounded-face{ font-family:'M PLUS Rounded 1c', 'Zen Maru Gothic', sans-serif; }
+  .mono{ font-family:'JetBrains Mono', monospace; }
+
+  /* --- signature: drifting breeze blobs --- */
+  .breeze-layer{
+    position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none;
+  }
+  .blob{
+    position:absolute; border-radius:50%; filter: blur(60px); opacity:0.55;
+    animation: drift 22s ease-in-out infinite;
+  }
+  .blob1{ width:420px; height:420px; background:radial-gradient(circle, #a9f2e2, transparent 70%); top:-120px; left:-100px; animation-duration:26s; }
+  .blob2{ width:360px; height:360px; background:radial-gradient(circle, #bfe6fb, transparent 70%); top:10%; right:-120px; animation-duration:30s; animation-delay:-6s; }
+  .blob3{ width:300px; height:300px; background:radial-gradient(circle, #ffe3d1, transparent 70%); bottom:-80px; left:20%; animation-duration:24s; animation-delay:-3s; }
+  @keyframes drift{
+    0%,100%{ transform: translate(0,0) scale(1); }
+    33%{ transform: translate(30px,-25px) scale(1.06); }
+    66%{ transform: translate(-25px,20px) scale(0.97); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .blob{ animation: none; }
+  }
+
+  .wave-divider{
+    display:block; width:100%; height:44px; margin-top:-2px;
+  }
+
+  .drop-zone{
+    border: 2.5px dashed #bfe8de;
+    background: rgba(255,255,255,0.6);
+    transition: border-color .2s ease, background-color .2s ease, transform .15s ease;
+  }
+  .drop-zone.drag-over{
+    border-color: var(--mint);
+    background: rgba(255,255,255,0.9);
+    transform: scale(1.01);
+  }
+
+  .card{
+    background: var(--card);
+    border: 1px solid var(--line);
+    box-shadow: 0 10px 30px -14px rgba(31,156,134,0.25);
+  }
+
+  input[type="range"]{
+    -webkit-appearance:none; height:6px; border-radius:999px;
+    background: linear-gradient(90deg, var(--mint), var(--sky));
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:20px; height:20px; border-radius:50%;
+    background:#fff; border:3px solid var(--mint);
+    box-shadow: 0 2px 6px rgba(31,156,134,0.35);
+    cursor:pointer; margin-top:-7px;
+  }
+  input[type="range"]::-webkit-slider-runnable-track{ height:6px; border-radius:999px; }
+
+  .seg-btn{ transition: all .15s ease; }
+  .seg-btn[data-active="true"]{
+    background: linear-gradient(135deg, var(--mint), var(--sky));
+    color:#fff; font-weight:700;
+    box-shadow: 0 6px 16px -6px rgba(47,191,166,0.55);
+  }
+
+  .card-fade{ animation: fadeUp .35s ease both; }
+  @keyframes fadeUp{ from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);} }
+
+  ::-webkit-scrollbar{ width:8px; height:8px; }
+  ::-webkit-scrollbar-track{ background: transparent; }
+  ::-webkit-scrollbar-thumb{ background: var(--line); border-radius:4px; }
+</style>
+</head>
+<body>
+
+<div class="breeze-layer">
+  <div class="blob blob1"></div>
+  <div class="blob blob2"></div>
+  <div class="blob blob3"></div>
+</div>
+
+<div class="relative z-10">
+
+  <header class="sticky top-0 z-20 backdrop-blur bg-white/60 border-b border-[var(--line)]">
+    <div class="max-w-5xl mx-auto px-5 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-white flex items-center justify-center shadow-sm border border-[var(--line)]">
+          <i data-lucide="wind" class="w-5 h-5 text-[var(--mint-deep)]"></i>
+        </div>
+        <div>
+          <h1 class="rounded-face text-[16px] font-extrabold leading-none">HEIC BREEZE</h1>
+          <p class="text-[11px] text-[var(--sub)] mt-1">iPhoneの写真を、その場でJPEGに</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-1.5 text-[11px] text-[var(--sub)] mono">
+        <i data-lucide="shield-check" class="w-3.5 h-3.5 text-[var(--mint-deep)]"></i>
+        <span>サーバー送信なし・ブラウザ内で完結</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-5 pt-10 pb-16">
+
+    <section class="mb-10 text-center">
+      <p class="rounded-face text-[12px] font-bold text-[var(--mint-deep)] tracking-[0.15em] mb-3">HEIC → JPEG CONVERTER</p>
+      <h2 class="rounded-face text-2xl md:text-[32px] font-extrabold leading-snug mb-3">
+        「この写真、開けません」を<br class="md:hidden">サクッと解決。
+      </h2>
+      <p class="text-[var(--sub)] text-sm max-w-xl mx-auto leading-relaxed">
+        iPhoneで撮った写真（.heic）をパソコンやWindowsでも開けるJPEGに変換します。アップロード不要、変換はすべてこのタブの中だけで完結します。
+      </p>
+    </section>
+
+    <section class="mb-8">
+      <div id="dropZone" class="drop-zone rounded-3xl p-10 md:p-14 text-center cursor-pointer">
+        <input id="fileInput" type="file" accept=".heic,.heif,image/heic,image/heif" multiple class="hidden">
+        <div class="flex flex-col items-center gap-3">
+          <div class="w-16 h-16 rounded-full flex items-center justify-center bg-gradient-to-br from-[var(--mint)] to-[var(--sky)] shadow-lg">
+            <i data-lucide="image-plus" class="w-7 h-7 text-white"></i>
+          </div>
+          <p class="rounded-face font-bold text-[16px]">ここにHEICファイルをドラッグ＆ドロップ</p>
+          <p class="text-[var(--sub)] text-xs mono">またはクリックして選択（複数まとめてOK）</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-8 card rounded-3xl p-5 md:p-6">
+      <p class="rounded-face text-[11px] font-bold text-[var(--sub)] tracking-[0.15em] mb-5">SETTINGS</p>
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <label class="text-sm font-bold flex items-center gap-2">
+            <i data-lucide="sparkles" class="w-4 h-4 text-[var(--mint-deep)]"></i>
+            画質（Quality）
+          </label>
+          <span id="qualityLabel" class="mono text-sm font-bold text-[var(--mint-deep)]">85%</span>
+        </div>
+        <input id="qualitySlider" type="range" min="50" max="100" value="85" class="w-full">
+        <div class="flex justify-between mono text-[10px] text-[var(--sub)] mt-1.5">
+          <span>50% 軽量</span>
+          <span>100% 高画質</span>
+        </div>
+        <p class="text-[var(--sub)] text-[11px] mt-3 leading-relaxed">
+          ※ HEICはもともと高効率な形式のため、変換後にファイルサイズが大きくなるのは自然な現象です。
+        </p>
+      </div>
+    </section>
+
+    <section id="actionBar" class="hidden mb-6 flex flex-wrap items-center justify-between gap-3 card rounded-3xl px-5 py-4">
+      <div class="flex items-center gap-3">
+        <span class="w-2 h-2 rounded-full bg-[var(--mint)]"></span>
+        <span class="mono text-xs text-[var(--sub)]"><span id="fileCount">0</span> 件を処理</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="clearBtn" class="mono text-xs px-3 py-2 rounded-full border border-[var(--line)] text-[var(--sub)] hover:text-[var(--red)] hover:border-[var(--red)] transition">
+          クリア
+        </button>
+        <button id="zipBtn" class="mono text-xs px-4 py-2 rounded-full bg-gradient-to-r from-[var(--mint)] to-[var(--sky)] text-white font-bold flex items-center gap-2 hover:brightness-105 transition disabled:opacity-40" disabled>
+          <i data-lucide="folder-archive" class="w-3.5 h-3.5"></i>
+          全てZIPでダウンロード
+        </button>
+      </div>
+    </section>
+
+    <section id="results" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"></section>
+
+    <div id="emptyState" class="text-center py-16 text-[var(--sub)]">
+      <i data-lucide="cloud" class="w-8 h-8 mx-auto mb-3 opacity-50"></i>
+      <p class="mono text-xs">まだファイルが読み込まれていません</p>
+    </div>
+
+  </main>
+
+  <footer class="py-8 border-t border-[var(--line)]">
+    <p class="text-center mono text-[10px] text-[var(--sub)]">
+      すべての変換処理はこのブラウザタブ内で完結します。画像がサーバーへ送信されることはありません。
+    </p>
+  </footer>
+</div>
+
+<script>
+lucide.createIcons();
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const resultsEl = document.getElementById('results');
+const emptyState = document.getElementById('emptyState');
+const actionBar = document.getElementById('actionBar');
+const fileCountEl = document.getElementById('fileCount');
+const zipBtn = document.getElementById('zipBtn');
+const clearBtn = document.getElementById('clearBtn');
+const qualitySlider = document.getElementById('qualitySlider');
+const qualityLabel = document.getElementById('qualityLabel');
+
+let items = [];
+let idSeq = 0;
+
+qualitySlider.addEventListener('input', () => {
+  qualityLabel.textContent = qualitySlider.value + '%';
+});
+
+['dragenter','dragover'].forEach(evt => {
+  dropZone.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('drag-over'); });
+});
+['dragleave','drop'].forEach(evt => {
+  dropZone.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); dropZone.classList.remove('drag-over'); });
+});
+dropZone.addEventListener('drop', (e) => {
+  const files = [...e.dataTransfer.files].filter(f => /\.(heic|heif)$/i.test(f.name) || /heic|heif/i.test(f.type));
+  handleFiles(files);
+});
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => { handleFiles([...fileInput.files]); fileInput.value = ''; });
+
+clearBtn.addEventListener('click', () => {
+  items.forEach(i => { if (i.previewUrl) URL.revokeObjectURL(i.previewUrl); });
+  items = [];
+  resultsEl.innerHTML = '';
+  updateActionBar();
+});
+
+function updateActionBar(){
+  if (items.length === 0){
+    actionBar.classList.add('hidden');
+    emptyState.classList.remove('hidden');
+    zipBtn.disabled = true;
+    return;
+  }
+  emptyState.classList.add('hidden');
+  actionBar.classList.remove('hidden');
+  fileCountEl.textContent = items.length;
+  const done = items.filter(i => i.status === 'done');
+  zipBtn.disabled = done.length === 0;
+}
+
+function formatBytes(bytes){
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1024/1024).toFixed(2) + ' MB';
+}
+
+function handleFiles(files){
+  if (!files.length) return;
+  files.forEach(file => {
+    const id = 'f' + (idSeq++);
+    const item = { id, originalName: file.name, originalSize: file.size, status: 'processing', blob: null, previewUrl: null, error: null };
+    items.push(item);
+    renderCard(item);
+    processFile(file, item);
+  });
+  updateActionBar();
+}
+
+function renderCard(item){
+  const card = document.createElement('div');
+  card.id = 'card-' + item.id;
+  card.className = 'card-fade card rounded-3xl overflow-hidden flex flex-col';
+  card.innerHTML = cardHTML(item);
+  resultsEl.appendChild(card);
+  lucide.createIcons();
+}
+
+function outputName(originalName){
+  const base = originalName.replace(/\.[^/.]+$/, '');
+  return base + '.jpg';
+}
+
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function cardHTML(item){
+  const outName = outputName(item.originalName);
+
+  if (item.status === 'processing'){
+    return `
+      <div class="aspect-video bg-[#f0fbf8] flex items-center justify-center">
+        <div class="flex flex-col items-center gap-2 text-[var(--sub)]">
+          <i data-lucide="loader-circle" class="w-6 h-6 animate-spin text-[var(--mint-deep)]"></i>
+          <span class="mono text-[10px]">変換中…</span>
+        </div>
+      </div>
+      <div class="p-4">
+        <p class="text-xs font-bold truncate">${escapeHtml(item.originalName)}</p>
+        <p class="mono text-[10px] text-[var(--sub)] mt-1">${formatBytes(item.originalSize)}</p>
+      </div>`;
+  }
+
+  if (item.status === 'error'){
+    return `
+      <div class="aspect-video bg-[#fff3f1] flex items-center justify-center">
+        <div class="flex flex-col items-center gap-2 text-[var(--red)]">
+          <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+          <span class="mono text-[10px]">変換に失敗しました</span>
+        </div>
+      </div>
+      <div class="p-4">
+        <p class="text-xs font-bold truncate">${escapeHtml(item.originalName)}</p>
+        <p class="mono text-[10px] text-[var(--red)] mt-1 leading-relaxed">${escapeHtml(item.error || '不明なエラー')}</p>
+      </div>`;
+  }
+
+  const diff = item.blob.size - item.originalSize;
+  const diffLabel = diff >= 0 ? `+${formatBytes(diff)}` : `-${formatBytes(-diff)}`;
+
+  return `
+    <div class="aspect-video bg-[#f0fbf8] relative overflow-hidden">
+      <img src="${item.previewUrl}" class="w-full h-full object-contain" alt="${escapeHtml(outName)}">
+      <span class="absolute top-2 left-2 mono text-[9px] bg-white/90 border border-[var(--line)] rounded-full px-2 py-0.5 text-[var(--mint-deep)] flex items-center gap-1 shadow-sm">
+        <i data-lucide="check" class="w-3 h-3"></i> 変換完了
+      </span>
+    </div>
+    <div class="p-4 flex-1 flex flex-col">
+      <p class="text-xs font-bold truncate" title="${escapeHtml(outName)}">${escapeHtml(outName)}</p>
+      <div class="flex items-center justify-between mono text-[10px] text-[var(--sub)] mt-2">
+        <span>${formatBytes(item.originalSize)} → ${formatBytes(item.blob.size)}</span>
+        <span class="text-[var(--sky)] font-bold">${diffLabel}</span>
+      </div>
+      <button class="dl-btn mono text-[11px] mt-3 px-3 py-2 rounded-full border border-[var(--line)] hover:border-[var(--mint)] hover:text-[var(--mint-deep)] transition flex items-center justify-center gap-2">
+        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+        ダウンロード
+      </button>
+    </div>`;
+}
+
+function updateCard(item){
+  const card = document.getElementById('card-' + item.id);
+  if (!card) return;
+  card.innerHTML = cardHTML(item);
+  lucide.createIcons();
+  if (item.status === 'done'){
+    const btn = card.querySelector('.dl-btn');
+    if (btn) btn.addEventListener('click', () => downloadItem(item));
+  }
+}
+
+function downloadItem(item){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(item.blob);
+  a.download = outputName(item.originalName);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+async function processFile(file, item){
+  try {
+    const quality = parseInt(qualitySlider.value, 10) / 100;
+    const result = await HeicTo({ blob: file, type: 'image/jpeg', quality });
+    const blob = Array.isArray(result) ? result[0] : result;
+
+    item.blob = blob;
+    item.previewUrl = URL.createObjectURL(blob);
+    item.status = 'done';
+  } catch (err) {
+    console.error('変換エラー:', item.originalName, err);
+    item.status = 'error';
+    item.error = humanizeError(err);
+  }
+  updateCard(item);
+  updateActionBar();
+}
+
+function humanizeError(err){
+  const raw = (err && err.message) ? err.message : String(err);
+  if (/heic|format|decode/i.test(raw)) {
+    return `HEIC形式として読み取れませんでした。ファイルが破損しているか、HEIC以外の形式の可能性があります。（詳細: ${raw}）`;
+  }
+  return raw;
+}
+
+zipBtn.addEventListener('click', async () => {
+  const done = items.filter(i => i.status === 'done');
+  if (!done.length) return;
+
+  zipBtn.disabled = true;
+  const originalLabel = zipBtn.innerHTML;
+  zipBtn.innerHTML = `<i data-lucide="loader-circle" class="w-3.5 h-3.5 animate-spin"></i> 圧縮中…`;
+  lucide.createIcons();
+
+  const zip = new JSZip();
+  done.forEach(item => zip.file(outputName(item.originalName), item.blob));
+
+  const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(zipBlob);
+  a.download = 'converted_jpegs.zip';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  zipBtn.innerHTML = originalLabel;
+  zipBtn.disabled = false;
+  lucide.createIcons();
+});
+
+updateActionBar();
+</script>
+</body>
+</html>
